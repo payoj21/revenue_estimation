@@ -1,3 +1,4 @@
 data/*
 images/*
 models/.ipynb_checkpoints/*
+models/catboost_info/*
