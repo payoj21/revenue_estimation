@@ -1,7 +1,5 @@
 data/*
 images/*
-models/.ipynb_checkpoints/*
-models/catboost_info/*
 codes/.ipynb_checkpoints/*
 codes/catboost_info/*
 codes/*.csv
