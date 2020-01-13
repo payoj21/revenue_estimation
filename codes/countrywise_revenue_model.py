@@ -2,6 +2,7 @@ import sys
 import os.path
 from os import path
 
+import math
 import pandas as pd
 import numpy as np
 import datetime
@@ -270,13 +271,13 @@ class DataHandler:
         return self.features_datatype
     
     def split_train_test(self, unique_accommodations):
-    	print(len(unique_accommodations))
-    	indices = np.random.rand(len(unique_accommodations)) < self.threshold
-    	train_accommodations = unique_accommodations[indices]
-    	test_accommodations = unique_accommodations[~indices]
-    	train = self.data.merge(pd.DataFrame(set(train_accommodations).intersection(self.data["ACCOMMODATION_CODE"].tolist()), columns=["ACCOMMODATION_CODE"]), on=["ACCOMMODATION_CODE"], how="inner")
-    	test = self.data.merge(pd.DataFrame(set(test_accommodations).intersection(self.data["ACCOMMODATION_CODE"].tolist()), columns=["ACCOMMODATION_CODE"]), on=["ACCOMMODATION_CODE"], how="inner")        
-    	return train, test
+        # print(len(unique_accommodations))
+        indices = np.random.rand(len(unique_accommodations)) < self.threshold
+        train_accommodations = unique_accommodations[indices]
+        test_accommodations = unique_accommodations[~indices]
+        train = self.data.merge(pd.DataFrame(set(train_accommodations).intersection(self.data["ACCOMMODATION_CODE"].tolist()), columns=["ACCOMMODATION_CODE"]), on=["ACCOMMODATION_CODE"], how="inner")
+        test = self.data.merge(pd.DataFrame(set(test_accommodations).intersection(self.data["ACCOMMODATION_CODE"].tolist()), columns=["ACCOMMODATION_CODE"]), on=["ACCOMMODATION_CODE"], how="inner")        
+        return train, test
 
     
 class prepare_model_data:
@@ -288,14 +289,12 @@ class prepare_model_data:
 
     def get_model_data(self):
         model_data = self.data_handler_obj.get_model_data()
-        for i in range(5):
-        	print(model_data.values[i])
         unique_accommodation = self.data_handler_obj.get_unique_accommodations(model_data)
         train, test = self.data_handler_obj.split_train_test(unique_accommodation)
         return train, test
 
 class Model():
-    def __init__(self, country, loss_func, iteration, lr, reg_lambda, train, test, features, output, convert_dict):
+    def __init__(self, country=None, tree_depth = 10, loss_func="RMSE", iteration=1000, lr=0.01, reg_lambda=0.01, train=None, test=None, features=None, output=None):
         self.country = country
         self.iter = iteration
         self.reg_lambda = reg_lambda
@@ -303,7 +302,6 @@ class Model():
         self.test = test
         self.features = features
         self.output = output
-        self.convert_dict = convert_dict
         self.loss = loss_func
         self.depth = tree_depth
         self.learning_rate = lr
@@ -319,12 +317,11 @@ class Model():
             logging_level="Silent",
             learning_rate=self.learning_rate,
             l2_leaf_reg=self.reg_lambda,
-            best_model_min_trees=True
         )
         
     
-    def separate_X_Y(self, train, test):
-        return train[self.features], train[self.output], test[self.features], test[self.output]
+    def separate_X_Y(self):
+        return self.train[self.features], self.test[self.features], self.train[self.output], self.test[self.output]
     
     @staticmethod
     def get_categorical_feature_indices(train_X):
@@ -334,11 +331,11 @@ class Model():
         X_train, X_validation, y_train, y_validation = train_test_split(train_X, train_Y, train_size=self.threshold, random_state=42)
         return X_train, X_validation, y_train, y_validation
     
-    def fit(self, X_train, y_train, X_validation, y_validation):
+    def fit(self, X_train, X_validation, y_train, y_validation,categorical_features_indices):
         self.model.fit(
             X_train,
             y_train,
-            cat_features=self.categorical_features_indices,
+            cat_features=categorical_features_indices,
             eval_set=(X_validation, y_validation)
         )
         return self
@@ -346,70 +343,129 @@ class Model():
     def predict(self, test_X):
         return self.model.predict(test_X)
     
-    def save_model(self):
-        self.model.save_model(fname=r"../models/"+country+"/model.json",
-                             format="json",
-                             export_parameters=None,
-                             pool=self.train)
-        
     def evaluate(self, test_Y, predicted_Y):
         error = predicted_Y - test_Y
         error_percent = np.array([])
         predicted_y_ratio = np.array([])
         for i, ele in enumerate(predicted_Y):
-            y = test_Y[self.output].values[i]
+            y = test_Y[i]
             if y != 0:
                 error_percent = np.append(error_percent, (ele-y)/y)
                 predicted_y_ratio = np.append(predicted_y_ratio, ele/y)
             else:
                 error_percent = np.append(error_percent, -1)
                 predicted_y_ratio = np.append(predicted_y_ratio, -1)
-        
-        error_rmse = math.sqrt((error**2).sum())
+
+        error_rmse = math.sqrt((error**2).mean())
         return error, error_rmse, error_percent, predicted_y_ratio
 
-    def train_model(self, model, train_X, train_Y, categorical_features_indices):
+    def cross_validation(self, model, train_X, train_Y, categorical_features_indices):
         cv_params = model.get_params()
         cv_data = cv(
             Pool(train_X, train_Y, cat_features=categorical_features_indices),
             cv_params,
             plot=True
         )
-        
         return cv_data
-
+    def save_model(self, train_X):
+        self.model.save_model(fname=r"../models/"+self.country+"/"+self.output+"/"+str(self.learning_rate)+"_"+str(self.iter)+"_"+str(self.reg_lambda)+"_"+str(self.depth)+"_model.json", format="json", export_parameters=None, pool=train_X)
 
 if __name__ == '__main__':
     countries = sys.argv[1]            
-    
+    # output = sys.argv[2]
+    countries = countries.replace(" ", "")
     countries_list = countries.split(",")
+
+    # output_list = output.replace(" ", "").split(",")
+    print("Countries the model is running for : ", countries_list)
+
     # country = "FR"
+    learning_rates = [0.0001, 0.0005, 0.01, 0.05, 0.1]
+    l2_lambdas = [0.0001, 0.0005, 0.01, 0.05, 0.1]
+    iterations = [500, 1000, 1500, 2000, 2500, 5000]
+    depths = [5, 8, 10]
+
+
     for country in countries_list:
-	    if_country = path.exists(r"../data/"+country+"/model_data.csv")
-	    prepare_data_object = prepare_data(country)
-	    if(if_country):
-	        print ("Country exists")
-	        data = prepare_data_object.read_model_data()
-	    else:
-	        print ("Country model doesn't exists. Creating model for "+country)
-	        data = prepare_data_object.write_model_data()
-	    # print(data.columns)
-	    # print(data.head(1))
-	    prepare_corrupt_data_object = prepare_corrupted_data(country, data)
-	    corrupt_data = prepare_corrupt_data_object.get_corrupt_data()
-	    prepare_corrupt_data_object.write_corrupt_data(corrupt_data)
-	    
-	    prepare_cleaned_data_object = prepare_cleaned_data(country, corrupt_data, data)
-	    cleaned_data = prepare_cleaned_data_object.get_cleaned_data()
-	    prepare_cleaned_data_object.write_cleaned_data(cleaned_data)
+        if_country = path.exists(r"../data/"+country+"/model_data.csv")
+        prepare_data_object = prepare_data(country)
+        if(if_country):
+            print ("Model data for "+country+" exists")
+            data = prepare_data_object.read_model_data()
+        else:
+            print ("Model data doesn't exists. Creating model data for "+country)
+            data = prepare_data_object.write_model_data()
 
-	    datahandle_object = DataHandler(cleaned_data)
-	    # model_data = datahandle_object.get_model_data()
-	    features = datahandle_object.get_features()
-	    outputs = datahandle_object.get_output()
-	    prepare_model_data_object = prepare_model_data(cleaned_data, country, features, outputs)
+        prepare_corrupt_data_object = prepare_corrupted_data(country, data)
+        corrupt_data = prepare_corrupt_data_object.get_corrupt_data()
+        prepare_corrupt_data_object.write_corrupt_data(corrupt_data)
 
-	    train, test = prepare_model_data_object.get_model_data()
+        prepare_cleaned_data_object = prepare_cleaned_data(country, corrupt_data, data)
+        cleaned_data = prepare_cleaned_data_object.get_cleaned_data()
+        prepare_cleaned_data_object.write_cleaned_data(cleaned_data)
 
-	    print(train.head(1), test.head(1))
-	    # model_obj = Model(country=country, train=train, test=test, )
+        datahandle_object = DataHandler(cleaned_data)
+        features = datahandle_object.get_features()
+        outputs = datahandle_object.get_output()
+
+        prepare_model_data_object = prepare_model_data(cleaned_data, country, features, outputs)
+        train, test = prepare_model_data_object.get_model_data()
+
+        test.to_csv(r"../data/"+country+"/test.csv")
+        train.to_csv(r"../data/"+country+"/train.csv")
+
+        print("Training model")
+        
+        for output in outputs:
+
+            for learning_rate in learning_rates:
+                for l2_lambda in l2_lambdas:
+                    for iteration in iterations:
+                        for depth in depths:
+                            print("iterations : ", iteration, "\tlearning rate : ", learning_rate, "\tlambda : ", l2_lambda, "\tdepth : ", depth)
+                            
+                            model_obj = Model(country=country, 
+                                iteration=iteration, 
+                                train=train, 
+                                test=test, 
+                                lr=learning_rate, 
+                                reg_lambda=l2_lambda, 
+                                tree_depth=depth, 
+                                features=features, 
+                                output=output
+                                )
+
+                            train_X, test_X, train_Y, test_Y = model_obj.separate_X_Y()
+
+                            categorical_features_indices = model_obj.get_categorical_feature_indices(train_X)
+
+                            X_train, X_validation, y_train, y_validation = model_obj.split_train_validation_set(train_X, train_Y)
+
+                            # print(len(X_train), len(y_train), len(X_validation), len(y_validation))
+                            print("Length of training set : ", len(X_train), "\tLength of training labels : ", len(y_train))
+                            print("Length of validation set : ", len(X_validation), "\tLength of validation labels : ", len(y_validation))
+                            print("Length of test set : ", len(test_X), "\tLength of test labels : ", len(test_Y))
+                            
+                            model_obj.fit(X_train, X_validation, y_train, y_validation, categorical_features_indices)
+                            
+                            print("Done with the "+output+" model training. Now, saving the model.")
+                            model_obj.save_model(X_train)
+
+                            test_predictions = model_obj.model.predict(test_X)
+                            output_field = "predicted_"+output
+                            test[output_field] = test_predictions
+                            # test_score = model_obj.evaluate(test_Y, test_predictions)
+                            test_error, test_error_rmse, test_error_percent, test_predicted_y_ratio = model_obj.evaluate(test_Y, test_predictions)
+                            
+                            train_predictions = model_obj.model.predict(train_X)
+                            train[output_field] = train_predictions
+                            # train_score = model_obj.evaluate(train_Y, train_predictions)
+                            train_error, train_error_rmse, train_error_percent, train_predicted_y_ratio = model_obj.evaluate(train_Y, train_predictions)
+                            
+                            print("training RMSE : ", train_error_rmse, " \ttest RMSE : ", test_error_rmse, "\t training prediction/revenue ratio: ", train_predicted_y_ratio.mean(), "\ttest prediction/revenue ratio: ", test_predicted_y_ratio.mean(),"\n\n")
+                            
+                            with open(r"../models/"+country+"/error_statements.txt", "a+") as file:
+                                file.write("Country : "+country+"\t"+output+" model\n")
+                                file.write("iterations : "+str(iteration)+"\tlearning rate : "+str(learning_rate)+"\tlambda : "+str(l2_lambda)+"\tdepth : "+str(depth)+"\n") 
+                                file.write("training RMSE : "+str(train_error_rmse)+" \t test RMSE : "+str(test_error_rmse)+"\t training prediction/revenue ratio: "+str(train_predicted_y_ratio.mean())+"\t test prediction/revenue ratio: "+str(test_predicted_y_ratio.mean())+"\n\n")
+                                file.close()

@@ -3,3 +3,4 @@ images/*
 codes/.ipynb_checkpoints/*
 codes/catboost_info/*
 codes/*.csv
+models/*
