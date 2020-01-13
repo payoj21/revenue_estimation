@@ -345,18 +345,20 @@ class Model():
     
     def evaluate(self, test_Y, predicted_Y):
         error = predicted_Y - test_Y
-        error_percent = np.array([])
-        predicted_y_ratio = np.array([])
+        error_percent_arr = np.array([])
+        predicted_y_ratio_arr = np.array([])
         for i, ele in enumerate(predicted_Y):
             y = test_Y[i]
             if y != 0:
-                error_percent = np.append(error_percent, (ele-y)/y)
-                predicted_y_ratio = np.append(predicted_y_ratio, ele/y)
-            else:
-                error_percent = np.append(error_percent, -1)
-                predicted_y_ratio = np.append(predicted_y_ratio, -1)
+                error_percent_arr = np.append(error_percent_arr, (ele-y)/y)
+                predicted_y_ratio_arr = np.append(predicted_y_ratio_arr, ele/y)
+            # else:
+            #     error_percent = np.append(error_percent, -1)
+            #     predicted_y_ratio = np.append(predicted_y_ratio, -1)
 
         error_rmse = math.sqrt((error**2).mean())
+        error_percent = error_percent_arr.mean()
+        predicted_y_ratio = predicted_y_ratio_arr.mean()
         return error, error_rmse, error_percent, predicted_y_ratio
 
     def cross_validation(self, model, train_X, train_Y, categorical_features_indices):
@@ -382,8 +384,8 @@ if __name__ == '__main__':
     # country = "FR"
     learning_rates = [0.0001, 0.0005, 0.01, 0.05, 0.1]
     l2_lambdas = [0.0001, 0.0005, 0.01, 0.05, 0.1]
-    iterations = [500, 1000, 1500, 2000, 2500, 5000]
-    depths = [5, 8, 10]
+    iterations = [1500, 2000, 2500, 5000]
+    depths = [10, 16]
 
 
     for country in countries_list:
@@ -462,10 +464,10 @@ if __name__ == '__main__':
                             # train_score = model_obj.evaluate(train_Y, train_predictions)
                             train_error, train_error_rmse, train_error_percent, train_predicted_y_ratio = model_obj.evaluate(train_Y, train_predictions)
                             
-                            print("training RMSE : ", train_error_rmse, " \ttest RMSE : ", test_error_rmse, "\t training prediction/revenue ratio: ", train_predicted_y_ratio.mean(), "\ttest prediction/revenue ratio: ", test_predicted_y_ratio.mean(),"\n\n")
+                            print("training RMSE : ", train_error_rmse, " \ttest RMSE : ", test_error_rmse, "\t training prediction/revenue ratio: ", train_predicted_y_ratio, "\ttest prediction/revenue ratio: ", test_predicted_y_ratio,"\n\n")
                             
                             with open(r"../models/"+country+"/error_statements.txt", "a+") as file:
                                 file.write("Country : "+country+"\t"+output+" model\n")
                                 file.write("iterations : "+str(iteration)+"\tlearning rate : "+str(learning_rate)+"\tlambda : "+str(l2_lambda)+"\tdepth : "+str(depth)+"\n") 
-                                file.write("training RMSE : "+str(train_error_rmse)+" \t test RMSE : "+str(test_error_rmse)+"\t training prediction/revenue ratio: "+str(train_predicted_y_ratio.mean())+"\t test prediction/revenue ratio: "+str(test_predicted_y_ratio.mean())+"\n\n")
+                                file.write("training RMSE : "+str(train_error_rmse)+" \t test RMSE : "+str(test_error_rmse)+"\t training prediction/revenue ratio: "+str(train_predicted_y_ratio)+"\t test prediction/revenue ratio: "+str(test_predicted_y_ratio)+"\n\n")
                                 file.close()
