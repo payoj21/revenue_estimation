@@ -235,7 +235,7 @@ class DataHandler:
         self.data = cleaned_data
         self.threshold = 0.8
         self.features = ["week","year","availability","ACCOMMODATION_TYPE","NUMBER_OF_PERSONS",'BEDROOM_COUNT', 'BATHROOM_COUNT', 'HAS_WIFI',
-                         'HAS_POOL', 'LATITUDE', 'LONGITUDE', 'ELEVATION','if_near_coast', 'distance_from_coast', 'price']
+                         'HAS_POOL', 'LATITUDE', 'LONGITUDE', 'ELEVATION']
         
         self.outputs = ["revenue", "occupancy"]
         
@@ -382,7 +382,7 @@ if __name__ == '__main__':
     print("Countries the model is running for : ", countries_list)
 
     # country = "FR"
-    learning_rates = [0.0001, 0.0005, 0.01, 0.05, 0.1]
+    learning_rates = [0.01, 0.05, 0.1]
     l2_lambdas = [0.0001, 0.0005, 0.01, 0.05, 0.1]
     iterations = [1500, 2000, 2500, 5000]
     depths = [10, 16]
